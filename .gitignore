@@ -1,0 +1,27 @@
+*.orig
+.bash_history
+.gitconfig
+.ssh/known_hosts
+
+########## Temp files ##########
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# OSX
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+
+########## Visual Studio ##########
+*.suo
+*.user
+*.sln.docstates
+*.tmp
+
+########## Autotest ##########
+obj/
+bin/
