@@ -222,7 +222,7 @@ namespace JiraWithTC
                 var collection = this.OfType<JiraInstanceElement>().ToList();
 
                 if (collection.All(t => t.Name != elementName))
-                    throw new ArgumentOutOfRangeException("Нет такой настройки в конфигурациях");
+                    throw new ArgumentOutOfRangeException(elementName);
 
                 return collection.FirstOrDefault(item => item.Name == elementName);
             }

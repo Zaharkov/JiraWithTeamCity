@@ -123,11 +123,11 @@ namespace JiraWithTC
             }
 
             if(Type == 0 || string.IsNullOrEmpty(On) || string.IsNullOrEmpty(BuildType))
-                throw new ArgumentNullException("Значения type, on, buildtype должны быть всегда заданы");
+                throw new ArgumentException("Значения type, on, buildtype должны быть всегда заданы");
 
             if(Type != OperationType.Build && (string.IsNullOrEmpty(Branch) || string.IsNullOrEmpty(Domain)
                 || string.IsNullOrEmpty(CheckOn) || string.IsNullOrEmpty(CheckBuildId)))
-                throw new ArgumentNullException("Если тип отличен от 'build' то должны быть заданы branch, domain, checkon, checkbuildid");
+                throw new ArgumentException("Если тип отличен от 'build' то должны быть заданы branch, domain, checkon, checkbuildid");
 
             Properties = new BuildProperties()
                 .Add("branchurl", BranchUrl)

@@ -14,7 +14,7 @@ namespace JiraWithTC
         /// <summary>
         /// Десериализатор для ответов от тимсити
         /// </summary>
-        private readonly static JsonDeserializer Deserializer = new JsonDeserializer();
+        private static readonly JsonDeserializer Deserializer = new JsonDeserializer();
 
         private readonly TeamCityInstanceElement _teamCity;
 
@@ -79,6 +79,8 @@ namespace JiraWithTC
             RemoveStartedAndWaitedBuilds("/httpAuth/app/rest/builds/?locator=running:true,branch:default:any", branchList);
             //убираем из списка бранчи, которые уже в очереди на запуск
             RemoveStartedAndWaitedBuilds("/httpAuth/app/rest/buildQueue", branchList);
+            //убираем из списка бранчи, у которые уже были сбилжены и у которых нет изменени
+            RemoveBuildsWithOutChanges(param.BuildType, branchList);
 
             foreach (var branchName in branchList)
             {
@@ -101,6 +103,62 @@ namespace JiraWithTC
             var build = Deserializer.Deserialize<BuildInfo>(response);
 
             return build.Status != StatusType.Success ? build.StatusText : null;
+        }
+
+        /// <summary>
+        /// Смотрим есть ли "несбидженные" изменения
+        /// </summary>
+        /// <param name="buildType">айди конфиругации билда</param>
+        /// <param name="branch">название бранча</param>
+        /// <returns></returns>
+        private bool IsChangesExist(string buildType, string branch)
+        {
+            //сначала вытаскиваем все последние билды этого бранча на этой конфигурации
+            var request = CreateRequest(Method.GET, "/httpAuth/app/rest/builds/?locator=branch:name:" + branch + ",buildType:" + buildType);
+            var response = ExecuteRequest(request);
+
+            var builds = Deserializer.Deserialize<BuildCollection>(response);
+
+            //если успешных билдов нет - "несбилженные" изменения есть (тупо нада сбилдить в первый раз нормально)
+            if (builds.Build.Any(t => t.Status == StatusType.Success))
+            {
+                var build = builds.Build.Where(k => k.Status == StatusType.Success).OrderByDescending(t => t.Id).First();
+
+                //вытаскиваем последний успешный билд
+                request = CreateRequest(Method.GET, "/httpAuth/app/rest/builds/id:" + build.Id);
+                response = ExecuteRequest(request);
+
+                var buildInfo = Deserializer.Deserialize<BuildInfo>(response);
+
+                var isLastChange = false;
+                var changeId = 0;
+
+                //вытаскиваем последнее "изменение"
+                if (buildInfo.LastChanges.Change.Any())
+                {
+                    changeId = buildInfo.LastChanges.Change.First().Id;
+                    isLastChange = true;
+                }
+
+                //фильтруем список изменений для данного бранча и типа билда относительно последнего успешно сбидженного изменения
+                request = CreateRequest(Method.GET, "/httpAuth/app/rest/changes/?locator=branch:name:" + branch + ",buildType:" + buildType + (isLastChange ? "&sinceChange=id:" + changeId : ""));
+                response = ExecuteRequest(request);
+
+                var changes = Deserializer.Deserialize<ChangeCollection>(response);
+
+                //если список не пустой - изменения есть - нужно сбилдить
+                return changes.Change.Any();
+            }
+
+            return true;
+        }
+
+        private void RemoveBuildsWithOutChanges(string buildType, ICollection<string> branchList)
+        {
+            var removeList = branchList.Where(branch => !IsChangesExist(buildType, branch)).ToList();
+
+            foreach (var remove in removeList)
+                branchList.Remove(remove);
         }
 
         /// <summary>
@@ -167,7 +225,14 @@ namespace JiraWithTC
         public bool DefaultBranch { get; set; }
         public int PercentageComplete { get; set; }
         public string StatusText { get; set; }
+        public ChangeCollection LastChanges { get; set; }
     }
+
+    public class Change
+    {
+        public int Id { get; set; }
+    }
+
 
     public class BuildProperties
     {
@@ -217,6 +282,16 @@ namespace JiraWithTC
         public List<BuildInfo> Build { get; set; }
     }
 
+    public class ChangeCollection
+    {
+        public ChangeCollection()
+        {
+            Change = new List<Change>();
+        }
+
+        public List<Change> Change { get; set; }
+    }
+
     /// <summary>
     /// Настройки для конфигураций для ТС
     /// </summary>
@@ -250,7 +325,7 @@ namespace JiraWithTC
                 var collection = this.OfType<TeamCityInstanceElement>().ToList();
 
                 if (collection.All(t => t.Name != elementName))
-                    throw new ArgumentOutOfRangeException("Нет такой настройки в конфигурациях");
+                    throw new ArgumentOutOfRangeException(elementName);
 
                 return collection.FirstOrDefault(item => item.Name == elementName);
             }
